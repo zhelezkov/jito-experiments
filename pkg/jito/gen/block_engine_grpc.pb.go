@@ -4,7 +4,7 @@
 // - protoc             v4.25.1
 // source: block_engine.proto
 
-package mev
+package gen
 
 import (
 	context "context"

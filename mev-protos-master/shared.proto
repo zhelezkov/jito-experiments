@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "jito-labs/mev";
+option go_package = "jito/gen";
 
 import "google/protobuf/timestamp.proto";
 

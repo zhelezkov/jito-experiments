@@ -4,7 +4,7 @@
 // - protoc             v4.25.1
 // source: auth.proto
 
-package mev
+package gen
 
 import (
 	context "context"

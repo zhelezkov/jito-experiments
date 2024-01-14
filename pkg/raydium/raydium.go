@@ -1,8 +1,9 @@
-package main
+package raydium
 
 import (
 	"errors"
-	mev "jito-bot/jito-mev"
+	"jito-bot/pkg/jito"
+	mev "jito-bot/pkg/jito/gen"
 
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
@@ -81,7 +82,7 @@ func MakeRaydiumSwapBundle(wallet solana.PrivateKey, side SwapSide, tokenMint so
 		})
 	}
 
-	swapTx, err := makeRaydiumSwapTx(wallet.PublicKey(), side, tokenMint, amount, poolKeys, blockhash)
+	swapTx, err := MakeRaydiumSwapTx(wallet.PublicKey(), side, tokenMint, amount, poolKeys, blockhash)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,7 @@ func MakeRaydiumSwapBundle(wallet solana.PrivateKey, side SwapSide, tokenMint so
 	}, nil
 }
 
-func makeRaydiumSwapTx(wallet solana.PK, side SwapSide, tokenMint solana.PK, amountIn uint64, poolKeys *RaydiumPoolKeys, blockhash solana.Hash) (*solana.Transaction, error) {
+func MakeRaydiumSwapTx(wallet solana.PK, side SwapSide, tokenMint solana.PK, amountIn uint64, poolKeys *RaydiumPoolKeys, blockhash solana.Hash) (*solana.Transaction, error) {
 	var tokenIn solana.PK
 	var tokenOut solana.PK
 	if side == SwapBuy {
@@ -147,7 +148,7 @@ func makeRaydiumSwapTx(wallet solana.PK, side SwapSide, tokenMint solana.PK, amo
 
 	// include jito tip only for buying, since it's bundled
 	if side == SwapBuy {
-		instructions = append(instructions, system.NewTransferInstruction(JITO_TIP_LAMPORTS, wallet, GetRandomJitoTipAccount()).Build())
+		instructions = append(instructions, system.NewTransferInstruction(jito.JitoTipLamports, wallet, jito.GetRandomJitoTipAccount()).Build())
 	}
 
 	return solana.NewTransaction(instructions, blockhash, solana.TransactionPayer(wallet))
@@ -222,7 +223,7 @@ func findMarketAuthority(marketId solana.PK) (solana.PK, error) {
 	return solana.PK{}, errors.New("unable to find market authority")
 }
 
-func parseMarketAccount(data []byte) (*MarketData, error) {
+func ParseMarketAccount(data []byte) (*MarketData, error) {
 	dec := bin.NewBinDecoder(data)
 	dec.SkipBytes(5)
 

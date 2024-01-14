@@ -1,7 +1,10 @@
-package main
+package jito
 
 import (
+	"log"
 	"math/rand"
+	"os"
+	"strconv"
 
 	"github.com/gagliardetto/solana-go"
 )
@@ -19,7 +22,16 @@ var jitoTipAccounts = []solana.PK{
 
 const JITO_TIP_ACCOUNTS_COUNT = 8
 
-var JITO_TIP_LAMPORTS uint64
+var JitoTipLamports uint64
+
+func init() {
+	var err error
+	JitoTipLamports, err = strconv.ParseUint(os.Getenv("JITO_TIP_LAMPORTS"), 10, 64)
+	if err != nil || JitoTipLamports < 1000 {
+		log.Fatalf("Error parsing JITO_TIP_LAMPORTS %v %v", JitoTipLamports, err)
+	}
+
+}
 
 func GetRandomJitoTipAccount() solana.PK {
 	return jitoTipAccounts[rand.Intn(8)]

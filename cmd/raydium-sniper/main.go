@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	mev "jito-bot/jito-mev"
+	"jito-bot/pkg/jito"
+	mev "jito-bot/pkg/jito/gen"
+	"jito-bot/pkg/raydium"
 	"log"
 	"log/slog"
 	"os"
 	"strconv"
 	"time"
 
+	_ "github.com/joho/godotenv/autoload"
+
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
-	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -39,21 +42,14 @@ var (
 )
 
 func init() {
-	log.SetFlags(log.LUTC | log.Ldate | log.Ltime | log.Lmicroseconds)
+	var err error
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file", err)
-	}
+	log.SetFlags(log.LUTC | log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	solanaConnection = rpc.New(os.Getenv("RPC_URL"))
 
 	jitoAuthKey = solana.MustPrivateKeyFromBase58(os.Getenv("JITO_AUTH_PRIVATE_KEY"))
 	blockEngineUrl = os.Getenv("JITO_BLOCK_ENGINE_URL")
-	JITO_TIP_LAMPORTS, err = strconv.ParseUint(os.Getenv("JITO_TIP_LAMPORTS"), 10, 64)
-	if err != nil || JITO_TIP_LAMPORTS < 1000 {
-		log.Fatal("Error parsing JITO_TIP_LAMPORTS", JITO_TIP_LAMPORTS, err)
-	}
 
 	wallet = solana.MustPrivateKeyFromBase58(os.Getenv("TRADER_PRIVATE_KEY"))
 	tradeAmountLamports, err = strconv.ParseUint(os.Getenv("TRADE_AMOUNT_LAMPORTS"), 10, 64)
@@ -67,9 +63,9 @@ func main() {
 		"wallet", wallet.PublicKey().String(),
 		"tradeAmountLamports", tradeAmountLamports,
 		"blockEngineUrl", blockEngineUrl,
-		"jitoTipLamports", JITO_TIP_LAMPORTS)
+		"jitoTipLamports", jito.JitoTipLamports)
 
-	auth, err := NewGrpcAuthHandler(blockEngineUrl, jitoAuthKey)
+	auth, err := jito.NewGrpcAuthHandler(blockEngineUrl, jitoAuthKey)
 	if err != nil {
 		log.Fatalf("unable to authenticate: %v", err)
 	}
@@ -104,7 +100,7 @@ func main() {
 	mempoolSub, err := searcher.SubscribeMempool(ctx, &mev.MempoolSubscription{
 		Msg: &mev.MempoolSubscription_ProgramV0Sub{
 			ProgramV0Sub: &mev.ProgramSubscriptionV0{
-				Programs: []string{RAYDIUM_PROGRAM_ADDRESS.String()},
+				Programs: []string{raydium.RAYDIUM_PROGRAM_ADDRESS.String()},
 			},
 		},
 	})
@@ -127,7 +123,7 @@ func main() {
 				if err != nil {
 					log.Fatalf("unable to get program id: %v", err)
 				}
-				if programId != RAYDIUM_PROGRAM_ADDRESS {
+				if programId != raydium.RAYDIUM_PROGRAM_ADDRESS {
 					continue
 				}
 
@@ -229,7 +225,7 @@ func handlePool(tx *solana.Transaction) {
 	}
 
 	start = time.Now()
-	poolKeys := &RaydiumPoolKeys{
+	poolKeys := &raydium.RaydiumPoolKeys{
 		Id:               poolId,
 		BaseVault:        coinVault,
 		QuoteVault:       pcVault,
@@ -241,7 +237,7 @@ func handlePool(tx *solana.Transaction) {
 		MarketEventQueue: market.EventQueue,
 	}
 
-	bundle, err := MakeRaydiumSwapBundle(wallet, SwapBuy, tokenMint, tradeAmountLamports, poolKeys, tx.Message.RecentBlockhash, []*solana.Transaction{tx})
+	bundle, err := raydium.MakeRaydiumSwapBundle(wallet, raydium.SwapBuy, tokenMint, tradeAmountLamports, poolKeys, tx.Message.RecentBlockhash, []*solana.Transaction{tx})
 	if err != nil {
 		slog.Error("unable to make bundle", err)
 		return
@@ -264,7 +260,7 @@ func handlePool(tx *solana.Transaction) {
 	go tryDoSell(tokenMint, poolKeys)
 }
 
-func tryDoSell(tokenMint solana.PK, poolKeys *RaydiumPoolKeys) {
+func tryDoSell(tokenMint solana.PK, poolKeys *raydium.RaydiumPoolKeys) {
 	slog.Info("trying to sell", "tokenMint", tokenMint.String())
 
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -309,7 +305,7 @@ loop:
 			slog.Error("unable to get blockhash", err)
 			return
 		}
-		tx, err := makeRaydiumSwapTx(wallet.PublicKey(), SwapSell, tokenMint, amountToSell, poolKeys, blockhash.Value.Blockhash)
+		tx, err := raydium.MakeRaydiumSwapTx(wallet.PublicKey(), raydium.SwapSell, tokenMint, amountToSell, poolKeys, blockhash.Value.Blockhash)
 		if err != nil {
 			slog.Error("unable to make tx", err)
 			return
@@ -340,13 +336,13 @@ func walletSigner(key solana.PublicKey) *solana.PrivateKey {
 	return nil
 }
 
-func findMarket(marketId *solana.PK) (*MarketData, error) {
+func findMarket(marketId *solana.PK) (*raydium.MarketData, error) {
 	marketFromCache, err := rdb.HGetAll(ctx, "market:"+marketId.String()).Result()
 	if err != nil {
 		return nil, err
 	}
 	if len(marketFromCache) > 0 {
-		return &MarketData{
+		return &raydium.MarketData{
 			Id:         solana.MustPublicKeyFromBase58(marketFromCache["id"]),
 			Bids:       solana.MustPublicKeyFromBase58(marketFromCache["bids"]),
 			Asks:       solana.MustPublicKeyFromBase58(marketFromCache["asks"]),
@@ -363,7 +359,7 @@ func findMarket(marketId *solana.PK) (*MarketData, error) {
 		return nil, err
 	}
 
-	market, err := parseMarketAccount(acc.Value.Data.GetBinary())
+	market, err := raydium.ParseMarketAccount(acc.Value.Data.GetBinary())
 	if err != nil || market.Id != *marketId {
 		return nil, fmt.Errorf("market id mismatch")
 	}

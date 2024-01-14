@@ -1,8 +1,9 @@
-package main
+package jito
 
 import (
 	"context"
-	mev "jito-bot/jito-mev"
+
+	mev "jito-bot/pkg/jito/gen"
 
 	"github.com/gagliardetto/solana-go"
 	"google.golang.org/grpc"
