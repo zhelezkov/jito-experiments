@@ -11,9 +11,12 @@ import (
 
 var GroupAddress = solana.MustPublicKeyFromBase58("4qp6Fx6tnZkY5Wropq9wUYgtFxXKwE6viZxFHg3rdAG8")
 
+type BankMap map[solana.PublicKey]*Bank
+type OraclePriceMap map[solana.PublicKey]*OraclePrice
+
 type Client struct {
-	banks        map[solana.PublicKey]*Bank
-	oraclePrices map[solana.PublicKey]*OraclePrice
+	Banks        BankMap
+	OraclePrices OraclePriceMap
 }
 
 func NewClient(connection *rpc.Client) (*Client, error) {
@@ -57,15 +60,12 @@ func NewClient(connection *rpc.Client) (*Client, error) {
 
 	priceFeedsMap := make(map[solana.PublicKey]*OraclePrice, len(bankKeys))
 	for i, priceFeedRaw := range priceFeedsRes.Value {
-		if bankKeys[i].Equals(solana.MustPublicKeyFromBase58("CCKtUs6Cgwo4aaQUmBPmyoApH2gUDErxNZCAntD6LYGh")) {
-			print("test")
-		}
 		priceFeedsMap[bankKeys[i]] = ParseOraclePrice(OracleSetupPyth, priceFeedRaw.Data.GetBinary())
 	}
 
 	return &Client{
-		banks:        banksMap,
-		oraclePrices: priceFeedsMap,
+		Banks:        banksMap,
+		OraclePrices: priceFeedsMap,
 	}, nil
 }
 

@@ -2,11 +2,10 @@ package marginfi
 
 import (
 	"encoding/binary"
+	"github.com/Pilatuz/bigz"
+	"github.com/gagliardetto/solana-go"
 	"jito-bot/pkg/fixed"
 	"math"
-
-	"github.com/gagliardetto/solana-go"
-	"github.com/shabbyrobe/go-num"
 )
 
 type BankOperationalState uint8
@@ -160,6 +159,7 @@ func (b *Bank) GetAssetWeight(reqType MarginRequirementType) fixed.I80F48 {
 	case MarginRequirementTypeMaintenance:
 		return b.Config.AssetWeightMaint
 	case MarginRequirementTypeInitial:
+		panic("not implemented")
 	case MarginRequirementTypeEquity:
 		panic("not implemented")
 	}
@@ -173,7 +173,8 @@ func (b *Bank) GetLiabilityWeight(reqType MarginRequirementType) fixed.I80F48 {
 	case MarginRequirementTypeMaintenance:
 		return b.Config.LiabilityWeightMaint
 	case MarginRequirementTypeEquity:
-		return fixed.I80F48{U128: num.U128FromUint(1)}
+		return fixed.I80F48{bigz.One256()}
+		//return fixed.I80F48{num.U128FromUint(1)}
 	}
 	panic("unreachable")
 }

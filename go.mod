@@ -15,6 +15,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/Pilatuz/bigz v1.2.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -22,6 +23,7 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/gagliardetto/treeout v0.1.4 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect

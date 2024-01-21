@@ -7,6 +7,7 @@ import (
 
 const MaxBalances = 16
 
+// Balance size 1 + 32 + 7 + 16 + 16 + 16 + 8 + 8 = 104
 type Balance struct {
 	Active bool
 	BankPK solana.PublicKey

@@ -87,32 +87,31 @@ func main() {
 		log.Fatalf("unable to create marginfi client: %v", err)
 	}
 
-	spew.Dump(marginfiClient)
+	gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"), &rpc.GetProgramAccountsOpts{
+		Filters: []rpc.RPCFilter{{
+			Memcmp: &rpc.RPCFilterMemcmp{
+				Offset: 8,
+				Bytes:  marginfi.GroupAddress.Bytes(),
+			},
+		}}})
+	//{
+	//	Memcmp: &rpc.RPCFilterMemcmp{
+	//		Offset: 8 + 32,
+	//		Bytes:  solana.MustPublicKeyFromBase58("2Hog8LpazH8kebxwvfWXRPdVu52pM2MGWHQbGVRzRsjp").Bytes(),
+	//	},
+	//}},
 
-	//acc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG"))
-	//if err != nil {
-	//	log.Fatalf("unable to get account info: %v", err)
-	//}
+	for _, gpaAcc := range gpa {
+		account := marginfi.ParseMarginfiAccount(gpaAcc.Account.Data.GetBinary())
+		canBeLiquidated, assets, liabilities := account.CanBeLiquidated(marginfiClient)
+		if canBeLiquidated {
+			maxLiabilityPaydown := assets.Sub(liabilities)
+			slog.Info("Account can be liquidated", "account", gpaAcc.Pubkey.String(), "health", maxLiabilityPaydown.String())
+		}
+	}
+
 	//
-	//price := pyth.ParsePriceData(acc.Bytes())
-
-	//spew.Dump(price)
-
-	// gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"), &rpc.GetProgramAccountsOpts{
-	// 	Filters: []rpc.RPCFilter{{
-	// 		Memcmp: &rpc.RPCFilterMemcmp{
-	// 			Offset: 8,
-	// 			Bytes:  solana.MustPublicKeyFromBase58("4qp6Fx6tnZkY5Wropq9wUYgtFxXKwE6viZxFHg3rdAG8").Bytes(),
-	// 		},
-	// 	}, {
-	// 		Memcmp: &rpc.RPCFilterMemcmp{
-	// 			Offset: 8 + 32,
-	// 			Bytes:  solana.MustPublicKeyFromBase58("2Hog8LpazH8kebxwvfWXRPdVu52pM2MGWHQbGVRzRsjp").Bytes(),
-	// 		},
-	// 	}},
-	// })
-
-	// spew.Dump(gpa)
+	//spew.Dump(canBeLiquidated)
 
 	//myAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("AbZoHRCWAV2RzWNTxssYZutmrQX7GMdc4RpTWZ8gtT6n"))
 	//if err != nil {
