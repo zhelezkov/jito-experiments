@@ -21,7 +21,7 @@ type OracleSetup uint8
 
 const (
 	OracleSetupNone OracleSetup = iota
-	OracleSetupPythEma
+	OracleSetupPyth
 	OracleSetupSwitchboardV2
 )
 

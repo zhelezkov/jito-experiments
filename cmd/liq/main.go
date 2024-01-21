@@ -82,14 +82,21 @@ func main() {
 
 	searcher = mev.NewSearcherServiceClient(conn)
 
-	acc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG"))
+	marginfiClient, err := marginfi.NewClient(solanaConnection)
 	if err != nil {
-		log.Fatalf("unable to get account info: %v", err)
+		log.Fatalf("unable to create marginfi client: %v", err)
 	}
 
-	price := pyth.ParsePriceData(acc.Bytes())
+	spew.Dump(marginfiClient)
 
-	spew.Dump(price)
+	//acc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG"))
+	//if err != nil {
+	//	log.Fatalf("unable to get account info: %v", err)
+	//}
+	//
+	//price := pyth.ParsePriceData(acc.Bytes())
+
+	//spew.Dump(price)
 
 	// gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"), &rpc.GetProgramAccountsOpts{
 	// 	Filters: []rpc.RPCFilter{{
@@ -107,25 +114,25 @@ func main() {
 
 	// spew.Dump(gpa)
 
-	myAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("AbZoHRCWAV2RzWNTxssYZutmrQX7GMdc4RpTWZ8gtT6n"))
-	if err != nil {
-		log.Fatalf("unable to get account info: %v", err)
-	}
-
-	mAcc := marginfi.ParseMarginfiAccount(myAcc.Bytes())
-	spew.Dump(mAcc)
-
-	bankAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("CCKtUs6Cgwo4aaQUmBPmyoApH2gUDErxNZCAntD6LYGh"))
-	if err != nil {
-		log.Fatalf("unable to get account info: %v", err)
-	}
-
-	bank := marginfi.ParseBank(bankAcc.Bytes())
-	spew.Dump(bank)
-
-	myBalance := mAcc.LendingAccount.Balances[0]
-
-	spew.Dump(bank.GetAssetQuantity(myBalance.AssetShares).AsFloat64())
+	//myAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("AbZoHRCWAV2RzWNTxssYZutmrQX7GMdc4RpTWZ8gtT6n"))
+	//if err != nil {
+	//	log.Fatalf("unable to get account info: %v", err)
+	//}
+	//
+	//mAcc := marginfi.ParseMarginfiAccount(myAcc.Bytes())
+	//spew.Dump(mAcc)
+	//
+	//bankAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("CCKtUs6Cgwo4aaQUmBPmyoApH2gUDErxNZCAntD6LYGh"))
+	//if err != nil {
+	//	log.Fatalf("unable to get account info: %v", err)
+	//}
+	//
+	//bank := marginfi.ParseBank(bankAcc.Bytes())
+	//spew.Dump(bank)
+	//
+	//myBalance := mAcc.LendingAccount.Balances[0]
+	//
+	//spew.Dump(bank.GetAssetQuantity(myBalance.AssetShares).AsFloat64())
 
 	// balanceMy := fixed.I80F48{U128: num.MustU128FromString("287207082485166")}
 	// spew.Dump(balanceMy.Float64())

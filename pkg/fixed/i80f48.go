@@ -1,6 +1,9 @@
 package fixed
 
-import "github.com/shabbyrobe/go-num"
+import (
+	"fmt"
+	"github.com/shabbyrobe/go-num"
+)
 
 const i80f48FractionalBits uint = 48
 
@@ -17,12 +20,24 @@ func MustI80F48FromLittleEndian(data []byte) I80F48 {
 	return I80F48{num.MustU128FromLittleEndian(data)}
 }
 
+func MustI80F48FromFloat64(data float64) I80F48 {
+	return I80F48{num.MustU128FromFloat64(data * multiplier2Pow48Float)}
+}
+
 func (u I80F48) Add(n I80F48) I80F48 {
 	return I80F48{u.U128.Add(n.U128)}
 }
 
+func (u I80F48) Sub(n I80F48) I80F48 {
+	return I80F48{u.U128.Sub(n.U128)}
+}
+
 func (u I80F48) Mul(n I80F48) I80F48 {
 	return I80F48{u.U128.Mul(n.U128).Rsh(i80f48FractionalBits)}
+}
+
+func (u I80F48) Mul64(n uint64) I80F48 {
+	return I80F48{u.U128.Mul64(n).Rsh(i80f48FractionalBits)}
 }
 
 func (u I80F48) Div(n I80F48) I80F48 {
@@ -44,4 +59,8 @@ func (u I80F48) AsFloat64() float64 {
 	res += mod.AsFloat64() / multiplier2Pow48Float
 
 	return res
+}
+
+func (u I80F48) String() string {
+	return fmt.Sprintf("%v", u.AsFloat64())
 }

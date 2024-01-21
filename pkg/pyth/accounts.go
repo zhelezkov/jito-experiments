@@ -1,91 +1,11 @@
-// export interface Base {
-//   magic: number
-//   version: number
-//   type: AccountType
-//   size: number
-// }
-
-// export interface MappingData extends Base {
-//   nextMappingAccount: PublicKey | null
-//   productAccountKeys: PublicKey[]
-// }
-
-// export interface Product {
-//   [index: string]: string
-// }
-
-// export interface ProductData extends Base {
-//   priceAccountKey: PublicKey | null
-//   product: Product
-// }
-
-// export interface Price {
-//   priceComponent: bigint
-//   price: number
-//   confidenceComponent: bigint
-//   confidence: number
-//   status: PriceStatus
-//   corporateAction: CorpAction
-//   publishSlot: number
-// }
-
-// export interface PriceComponent {
-//   publisher: PublicKey
-//   aggregate: Price
-//   latest: Price
-// }
-
-// /**
-//  * valueComponent = numerator / denominator
-//  * value = valueComponent * 10 ^ exponent (from PriceData)
-//  */
-// export interface Ema {
-//   valueComponent: bigint
-//   value: number
-//   numerator: bigint
-//   denominator: bigint
-// }
-
-// export interface PriceData extends Base {
-//   priceType: PriceType
-//   exponent: number
-//   numComponentPrices: number
-//   numQuoters: number
-//   lastSlot: bigint
-//   validSlot: bigint
-//   emaPrice: Ema
-//   emaConfidence: Ema
-//   timestamp: bigint
-//   minPublishers: number
-//   drv2: number
-//   drv3: number
-//   drv4: number
-//   productAccountKey: PublicKey
-//   nextPriceAccountKey: PublicKey | null
-//   previousSlot: bigint
-//   previousPriceComponent: bigint
-//   previousPrice: number
-//   previousConfidenceComponent: bigint
-//   previousConfidence: number
-//   previousTimestamp: bigint
-//   priceComponents: PriceComponent[]
-//   aggregate: Price
-//   // The current price and confidence and status. The typical use of this interface is to consume these three fields.
-//   // If undefined, Pyth does not currently have price information for this product. This condition can
-//   // happen for various reasons (e.g., US equity market is closed, or insufficient publishers), and your
-//   // application should handle it gracefully. Note that other raw price information fields (such as
-//   // aggregate.price) may be defined even if this is undefined; you most likely should not use those fields,
-//   // as their value can be arbitrary when this is undefined.
-//   price: number | undefined
-//   confidence: number | undefined
-//   status: PriceStatus
-// }
-
 package pyth
 
 import (
 	"encoding/binary"
+	"math"
 )
+
+const PriceConfIntervals float64 = 2.12
 
 const Magic uint32 = 0xa1b2c3d4
 const Version uint32 = 2
@@ -132,12 +52,10 @@ const (
 	AccountTypePermission
 )
 
-type PriceComponent struct{}
-
 type Base struct {
 	Magic   uint32
 	Version uint32
-	Type    AccountType // AccountType
+	Type    AccountType
 	Size    uint32
 }
 
@@ -149,10 +67,12 @@ type Ema struct {
 }
 
 type PriceInfo struct {
-	Price       int64
-	Conf        uint64
-	Status      PriceStatus
-	PublishSlot uint64
+	PriceComponent int64
+	Price          float64
+	ConfComponent  uint64
+	Conf           float64
+	Status         PriceStatus
+	PublishSlot    uint64
 }
 
 type PriceData struct {
@@ -170,15 +90,20 @@ type PriceData struct {
 }
 
 func ParsePriceData(data []byte) *PriceData {
+	magic := binary.LittleEndian.Uint32(data[0:4])
+	if magic != Magic {
+		panic("invalid magic")
+	}
+	exponent := int32(binary.LittleEndian.Uint32(data[20:24]))
 	return &PriceData{
 		Base: Base{
-			Magic:   binary.LittleEndian.Uint32(data[0:4]),
+			Magic:   magic,
 			Version: binary.LittleEndian.Uint32(data[4:8]),
 			Type:    AccountType(binary.LittleEndian.Uint32(data[8:12])),
 			Size:    binary.LittleEndian.Uint32(data[12:16]),
 		},
 		PriceType:     PriceType(binary.LittleEndian.Uint32(data[16:20])),
-		Exponent:      int32(binary.LittleEndian.Uint32(data[20:24])),
+		Exponent:      exponent,
 		LastSlot:      binary.LittleEndian.Uint64(data[32:40]),
 		ValidSlot:     binary.LittleEndian.Uint64(data[40:48]),
 		Timestamp:     int64(binary.LittleEndian.Uint64(data[96:104])),
@@ -186,15 +111,19 @@ func ParsePriceData(data []byte) *PriceData {
 		PrevPrice:     int64(binary.LittleEndian.Uint64(data[184:192])),
 		PrevConf:      binary.LittleEndian.Uint64(data[192:200]),
 		PrevTimestamp: int64(binary.LittleEndian.Uint64(data[200:208])),
-		Agg:           ParsePriceInfo(data[208:240]),
+		Agg:           ParsePriceInfo(data[208:240], exponent),
 	}
 }
 
-func ParsePriceInfo(data []byte) PriceInfo {
+func ParsePriceInfo(data []byte, exponent int32) PriceInfo {
+	priceComponent := int64(binary.LittleEndian.Uint64(data[0:8]))
+	confComponent := binary.LittleEndian.Uint64(data[8:16])
 	return PriceInfo{
-		Price:       int64(binary.LittleEndian.Uint64(data[0:8])),
-		Conf:        binary.LittleEndian.Uint64(data[8:16]),
-		Status:      PriceStatus(binary.LittleEndian.Uint32(data[16:20])),
-		PublishSlot: binary.LittleEndian.Uint64(data[24:32]),
+		PriceComponent: priceComponent,
+		Price:          float64(priceComponent) * math.Pow10(int(exponent)),
+		ConfComponent:  confComponent,
+		Conf:           float64(confComponent) * math.Pow10(int(exponent)),
+		Status:         PriceStatus(binary.LittleEndian.Uint32(data[16:20])),
+		PublishSlot:    binary.LittleEndian.Uint64(data[24:32]),
 	}
 }

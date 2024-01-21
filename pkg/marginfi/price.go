@@ -1,6 +1,9 @@
 package marginfi
 
-import "jito-bot/pkg/fixed"
+import (
+	"jito-bot/pkg/fixed"
+	"jito-bot/pkg/pyth"
+)
 
 type PriceBias uint
 
@@ -12,14 +15,39 @@ const (
 
 type PriceWithConfidence struct {
 	Price        fixed.I80F48
-	Confidence   fixed.I80F48
+	Conf         fixed.I80F48
 	LowestPrice  fixed.I80F48
 	HighestPrice fixed.I80F48
 }
 
 type OraclePrice struct {
 	PriceRealtime PriceWithConfidence
-	PriceWighted  PriceWithConfidence
+	//PriceWeighted PriceWithConfidence
+}
+
+var PythPriceConfIntervals = fixed.MustI80F48FromFloat64(pyth.PriceConfIntervals)
+
+func ParseOraclePrice(setup OracleSetup, data []byte) *OraclePrice {
+	if setup != OracleSetupPyth {
+		panic("unsupported oracle setup")
+	}
+
+	pythPriceData := pyth.ParsePriceData(data)
+
+	priceRealtime := fixed.MustI80F48FromFloat64(pythPriceData.Agg.Price)
+	confRealtime := fixed.MustI80F48FromFloat64(pythPriceData.Agg.Conf)
+	adjConfRealtime := confRealtime.Mul(PythPriceConfIntervals)
+
+	//price := pythPriceData.
+	return &OraclePrice{
+		PriceRealtime: PriceWithConfidence{
+			Price:        priceRealtime,
+			Conf:         confRealtime,
+			LowestPrice:  priceRealtime.Sub(adjConfRealtime),
+			HighestPrice: priceRealtime.Add(adjConfRealtime),
+		},
+	}
+	return nil
 }
 
 func GetPrice(oraclePrice *OraclePrice, bias PriceBias, isWeighted bool) (res fixed.I80F48) {
@@ -37,7 +65,8 @@ func GetPrice(oraclePrice *OraclePrice, bias PriceBias, isWeighted bool) (res fi
 
 func GetPriceWithConfidence(oraclePrice *OraclePrice, isWeighted bool) PriceWithConfidence {
 	if isWeighted {
-		return oraclePrice.PriceWighted
+		panic("is weighted price not really implemented... need to do ema parsing from pyth")
+		//return oraclePrice.PriceWeighted
 	}
 	return oraclePrice.PriceRealtime
 }
