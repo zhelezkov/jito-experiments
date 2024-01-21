@@ -4,6 +4,7 @@ import (
 	"context"
 	"jito-bot/pkg/jito"
 	mev "jito-bot/pkg/jito/gen"
+	"jito-bot/pkg/marginfi"
 	"jito-bot/pkg/pyth"
 	"log"
 	"log/slog"
@@ -38,8 +39,6 @@ var (
 	wallet              solana.PrivateKey
 	tradeAmountLamports uint64
 )
-
-// var TCOMP_PROGRAM_ADDRESS = solana.MustPublicKeyFromBase58("TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp")
 
 func init() {
 	var err error
@@ -92,7 +91,71 @@ func main() {
 
 	spew.Dump(price)
 
-	// return
+	// gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"), &rpc.GetProgramAccountsOpts{
+	// 	Filters: []rpc.RPCFilter{{
+	// 		Memcmp: &rpc.RPCFilterMemcmp{
+	// 			Offset: 8,
+	// 			Bytes:  solana.MustPublicKeyFromBase58("4qp6Fx6tnZkY5Wropq9wUYgtFxXKwE6viZxFHg3rdAG8").Bytes(),
+	// 		},
+	// 	}, {
+	// 		Memcmp: &rpc.RPCFilterMemcmp{
+	// 			Offset: 8 + 32,
+	// 			Bytes:  solana.MustPublicKeyFromBase58("2Hog8LpazH8kebxwvfWXRPdVu52pM2MGWHQbGVRzRsjp").Bytes(),
+	// 		},
+	// 	}},
+	// })
+
+	// spew.Dump(gpa)
+
+	myAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("AbZoHRCWAV2RzWNTxssYZutmrQX7GMdc4RpTWZ8gtT6n"))
+	if err != nil {
+		log.Fatalf("unable to get account info: %v", err)
+	}
+
+	mAcc := marginfi.ParseMarginfiAccount(myAcc.Bytes())
+	spew.Dump(mAcc)
+
+	bankAcc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("CCKtUs6Cgwo4aaQUmBPmyoApH2gUDErxNZCAntD6LYGh"))
+	if err != nil {
+		log.Fatalf("unable to get account info: %v", err)
+	}
+
+	bank := marginfi.ParseBank(bankAcc.Bytes())
+	spew.Dump(bank)
+
+	myBalance := mAcc.LendingAccount.Balances[0]
+
+	spew.Dump(bank.GetAssetQuantity(myBalance.AssetShares).AsFloat64())
+
+	// balanceMy := fixed.I80F48{U128: num.MustU128FromString("287207082485166")}
+	// spew.Dump(balanceMy.Float64())
+
+	// bInt := big.Int{}
+
+	// bankAssetShareValue := uint256.MustFromDecimal("287207082485166")
+	// spew.Dump(bankAssetShareValue)
+	// MULTIPLIER := uint256.MustFromDecimal("281474976710656")
+	// rem := uint256.Int{}
+	// div, _ := bankAssetShareValue.DivMod(bankAssetShareValue, MULTIPLIER, &rem)
+
+	// res := div.Float64()
+	// res += rem.Float64() / 281474976710656
+
+	// spew.Dump(res)
+
+	// spew.Dump(bankAssetShareValue.Lsh(bankAssetShareValue, 48).String())
+
+	// balance := num.MustU128FromString("287207082485166")
+	// MULTIPLIER := num.MustU128FromString("281474976710656")
+	// div, mod := balance.QuoRem(MULTIPLIER)
+
+	// res := div.AsFloat64()
+	// res += mod.AsFloat64() / 281474976710656
+	// spew.Dump(res)
+	// balance.QuoRem()
+	// mul := balance.Mul(bankBalance).AsBigFloat()
+	// spew.Dump(new(big.Float).Quo(mul, big.NewFloat(2e48)).String())
+	// spew.Dump(new(big.Int).Quo(mul, big.NewInt(0).set))
 
 	// zero := uint64(0)
 	// gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"), &rpc.GetProgramAccountsOpts{
@@ -111,7 +174,9 @@ func main() {
 	// 	log.Fatalf("unable to get program accounts: %v", err)
 	// }
 
-	// fmt.Println(gpa)
+	// fmt.Println(len(gpa))
+
+	return
 
 	// pks := make([]string, len(gpa))
 	// for i := 0; i < len(pks); i++ {
