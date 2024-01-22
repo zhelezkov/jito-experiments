@@ -206,7 +206,7 @@ func (b *Bank) ComputeUsdValue(
 		res = res.Mul(weight)
 	}
 	if scaleToBase {
-		res = res.Div64(uint64(math.Pow10(int(b.MintDecimals))))
+		res = res.Div(fixed.MustI80F48FromFloat64(math.Pow10(int(b.MintDecimals))))
 	}
 	return
 }

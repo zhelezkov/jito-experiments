@@ -106,7 +106,7 @@ func main() {
 		canBeLiquidated, assets, liabilities := account.CanBeLiquidated(marginfiClient)
 		if canBeLiquidated {
 			maxLiabilityPaydown := assets.Sub(liabilities)
-			slog.Info("Account can be liquidated", "account", gpaAcc.Pubkey.String(), "health", maxLiabilityPaydown.String())
+			slog.Info("Account can be liquidated", "owner", account.Authority.String(), "account", gpaAcc.Pubkey.String(), "health", maxLiabilityPaydown.AsFloat64(), "assets", assets.AsFloat64(), "liabilities", liabilities.AsFloat64())
 		}
 	}
 

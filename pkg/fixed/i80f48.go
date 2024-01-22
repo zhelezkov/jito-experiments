@@ -16,7 +16,6 @@ var (
 )
 
 type I80F48 struct {
-	//num.U256
 	bigz.Uint256
 }
 
@@ -25,7 +24,10 @@ func MustI80F48FromLittleEndian(data []byte) I80F48 {
 }
 
 func MustI80F48FromFloat64(data float64) I80F48 {
-	return I80F48{uint256.From64(math.Float64bits(data * multiplier2Pow48Float))}
+	intPart := math.Trunc(data)
+	val := uint256.From64(uint64(intPart)).Lsh(i80f48FractionalBits)
+	val = val.Add(uint256.From64(uint64((data - intPart) * multiplier2Pow48Float)))
+	return I80F48{val}
 }
 
 func (u I80F48) Add(n I80F48) I80F48 {
