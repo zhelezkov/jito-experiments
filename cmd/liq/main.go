@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"jito-bot/pkg/fixed"
 	"jito-bot/pkg/jito"
 	mev "jito-bot/pkg/jito/gen"
 	"jito-bot/pkg/marginfi"
@@ -10,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	_ "github.com/joho/godotenv/autoload"
@@ -101,14 +103,25 @@ func main() {
 	//	},
 	//}},
 
-	for _, gpaAcc := range gpa {
-		account := marginfi.ParseMarginfiAccount(gpaAcc.Account.Data.GetBinary())
+	tenBucks := fixed.MustI80F48FromFloat64(10)
+
+	parsedAccounts := make([]*marginfi.MarginfiAccount, len(gpa))
+	for i, gpaAcc := range gpa {
+		parsedAccounts[i] = marginfi.ParseMarginfiAccount(gpaAcc.Account.Data.GetBinary())
+	}
+
+	now := time.Now()
+	for _, account := range parsedAccounts {
+		//account := marginfi.ParseMarginfiAccount(gpaAcc.Account.Data.GetBinary())
 		canBeLiquidated, assets, liabilities := account.CanBeLiquidated(marginfiClient)
-		if canBeLiquidated {
-			maxLiabilityPaydown := assets.Sub(liabilities)
-			slog.Info("Account can be liquidated", "owner", account.Authority.String(), "account", gpaAcc.Pubkey.String(), "health", maxLiabilityPaydown.AsFloat64(), "assets", assets.AsFloat64(), "liabilities", liabilities.AsFloat64())
+		if canBeLiquidated && liabilities.BiggerThanOrEqual(tenBucks) {
+			maxLiabilityPaydown := assets.AsFloat64() - liabilities.AsFloat64()
+			_ = maxLiabilityPaydown
+			slog.Info("Account can be liquidated", "owner", account.Authority.String(), "health", maxLiabilityPaydown, "assets", assets.AsFloat64(), "liabilities", liabilities.AsFloat64())
 		}
 	}
+
+	slog.Info("took", time.Since(now))
 
 	//
 	//spew.Dump(canBeLiquidated)

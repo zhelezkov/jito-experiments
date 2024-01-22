@@ -13,6 +13,26 @@ const i80f48FractionalBits uint = 48
 var (
 	multiplier2Pow48              = uint256.From64(281474976710656)
 	multiplier2Pow48Float float64 = 281474976710656
+
+	I80f48Pow10 = [...]I80F48{
+		MustI80F48FromFloat64(math.Pow10(0)),
+		MustI80F48FromFloat64(math.Pow10(1)),
+		MustI80F48FromFloat64(math.Pow10(2)),
+		MustI80F48FromFloat64(math.Pow10(3)),
+		MustI80F48FromFloat64(math.Pow10(4)),
+		MustI80F48FromFloat64(math.Pow10(5)),
+		MustI80F48FromFloat64(math.Pow10(6)),
+		MustI80F48FromFloat64(math.Pow10(7)),
+		MustI80F48FromFloat64(math.Pow10(8)),
+		MustI80F48FromFloat64(math.Pow10(9)),
+		MustI80F48FromFloat64(math.Pow10(10)),
+		MustI80F48FromFloat64(math.Pow10(11)),
+		MustI80F48FromFloat64(math.Pow10(12)),
+		MustI80F48FromFloat64(math.Pow10(13)),
+		MustI80F48FromFloat64(math.Pow10(14)),
+		MustI80F48FromFloat64(math.Pow10(15)),
+		MustI80F48FromFloat64(math.Pow10(16)),
+	}
 )
 
 type I80F48 struct {
@@ -56,6 +76,10 @@ func (u I80F48) Div64(n uint64) I80F48 {
 
 func (u I80F48) LessThan(n I80F48) bool {
 	return u.Uint256.Cmp(n.Uint256) < 0
+}
+
+func (u I80F48) BiggerThanOrEqual(n I80F48) bool {
+	return u.Uint256.Cmp(n.Uint256) >= 0
 }
 
 func (u I80F48) AsFloat64() float64 {
