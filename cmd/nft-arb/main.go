@@ -1,15 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"jito-bot/pkg/jito"
 	mev "jito-bot/pkg/jito/gen"
+	"jito-bot/pkg/me"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/valyala/fastjson"
 
 	_ "github.com/joho/godotenv/autoload"
 
@@ -58,6 +66,11 @@ func init() {
 	}
 }
 
+type CollectionInfo struct {
+	BuyPrice  uint64
+	Royalties float64
+}
+
 func main() {
 	slog.Info("starting",
 		"wallet", wallet.PublicKey().String(),
@@ -81,7 +94,119 @@ func main() {
 	}
 	defer conn.Close()
 
-	denominator, err := hex.DecodeString("c9a1e33e5cee6ff0")
+	acc, err := solanaConnection.GetAccountInfo(ctx, solana.MustPublicKeyFromBase58("7M16BixWCU5otctGo14349yu2Kroz8dtpBmmXCfHZnK5"))
+	if err != nil {
+		log.Fatalf("unable to get account info: %v", err)
+	}
+
+	tradeState := me.ParseSellerTradeState(acc.Bytes())
+
+	spew.Dump(tradeState)
+
+	denominator, err := hex.DecodeString("01ee48898a15fef9")
+	if err != nil {
+		log.Fatalf("unable to decode denominator: %v", err)
+	}
+
+	zero := uint64(0)
+	gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("M3mxk5W2tt27WGT7THox7PmgRDp4m6NEhL5xvxrBfS1"), &rpc.GetProgramAccountsOpts{
+		Filters: []rpc.RPCFilter{{
+			Memcmp: &rpc.RPCFilterMemcmp{
+				Offset: 0,
+				Bytes:  denominator,
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatalf("unable to get program accounts: %v", err)
+	}
+
+	spew.Dump(len(gpa))
+
+	meSellerTradeStates := make([]*me.SellerTradeState, len(gpa))
+	for i, acc := range gpa {
+		meAcc := me.ParseSellerTradeState(acc.Account.Data.GetBinary())
+		meSellerTradeStates[i] = meAcc
+	}
+
+	parser := fastjson.Parser{}
+
+	collectionToMinPrice := make(map[string]CollectionInfo)
+
+	batchSize := 1000
+	url := `https://mainnet.helius-rpc.com/?api-key=d3e02706-1eb1-4fcd-b11a-87d79aed0e5d`
+	for i := 0; i < len(meSellerTradeStates); i += batchSize {
+		j := i + batchSize
+		if j > len(meSellerTradeStates) {
+			j = len(meSellerTradeStates)
+		}
+		// process
+		slice := meSellerTradeStates[i:j]
+		assets := make([]string, len(slice))
+		for i, acc := range slice {
+			assets[i] = acc.AssetId.String()
+		}
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      "1",
+			"method":  "getAssetBatch",
+			"params": map[string]interface{}{
+				"ids": assets,
+			},
+		})
+
+		resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			log.Fatalf("unable to get assets: %v", err)
+		}
+		bodyResp, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		resp.Body.Close()
+		res, err := parser.ParseBytes(bodyResp)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		result := res.GetArray("result")
+		for i, asset := range result {
+			meAcc := slice[i]
+			grouping := asset.Get("grouping", "0")
+			if grouping == nil {
+				slog.Info("no grouping", "asset", assets[i])
+				continue
+			}
+			groupKey := string(grouping.GetStringBytes("group_key"))
+			groupValue := string(grouping.GetStringBytes("group_value"))
+			if groupKey != "collection" {
+				slog.Info("no collection", "asset", assets[i])
+				continue
+			}
+			royalty := asset.GetFloat64("royalty", "percent")
+			if collectionInfo, ok := collectionToMinPrice[groupValue]; ok {
+				if meAcc.BuyerPrice < collectionInfo.BuyPrice {
+					collectionToMinPrice[groupValue] = CollectionInfo{
+						BuyPrice:  meAcc.BuyerPrice,
+						Royalties: royalty,
+					}
+				}
+			} else {
+				collectionToMinPrice[groupValue] = CollectionInfo{
+					BuyPrice:  meAcc.BuyerPrice,
+					Royalties: royalty,
+				}
+			}
+		}
+	}
+
+	for col, colInfo := range collectionToMinPrice {
+		rdb.HSet(ctx, "collections:"+col, "buy_price", colInfo.BuyPrice, "royalties", colInfo.Royalties)
+	}
+
+	return
+
+	denominator, err = hex.DecodeString("c9a1e33e5cee6ff0")
 	if err != nil {
 		log.Fatalf("unable to decode denominator: %v", err)
 	}
@@ -123,8 +248,8 @@ func main() {
 	// fmt.Println(pk.String())
 	// bin.NewBorshDecoder()
 
-	zero := uint64(0)
-	gpa, err := solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp"), &rpc.GetProgramAccountsOpts{
+	zero = uint64(0)
+	gpa, err = solanaConnection.GetProgramAccountsWithOpts(ctx, solana.MustPublicKeyFromBase58("TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp"), &rpc.GetProgramAccountsOpts{
 		Filters: []rpc.RPCFilter{{
 			Memcmp: &rpc.RPCFilterMemcmp{
 				Offset: 0,

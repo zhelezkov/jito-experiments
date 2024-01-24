@@ -3,19 +3,19 @@ module jito-bot
 go 1.21.6
 
 require (
+	github.com/Pilatuz/bigz v1.2.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gagliardetto/binary v0.7.9
 	github.com/gagliardetto/solana-go v1.8.4
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.4.0
-	github.com/shabbyrobe/go-num v0.0.0-20220218224608-bad1c8f534d7
+	github.com/valyala/fastjson v1.6.4
 	google.golang.org/grpc v1.60.1
 	google.golang.org/protobuf v1.32.0
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/Pilatuz/bigz v1.2.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -23,7 +23,6 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/gagliardetto/treeout v0.1.4 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
@@ -46,5 +45,5 @@ require (
 	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240116215550-a9fa1716bcac // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
 )
