@@ -15,20 +15,88 @@ import (
 var magicEdenCollectionToMinPrice map[string]uint64 = make(map[string]uint64)
 var tensorCollectionToMaxSellPrice map[string]uint64 = make(map[string]uint64)
 
-var client helius.HeliusClient = helius.HeliusClient{
+var dasApi helius.HeliusClient = helius.HeliusClient{
 	Url: "https://mainnet.helius-rpc.com/?api-key=d3e02706-1eb1-4fcd-b11a-87d79aed0e5d",
 }
 
-func CollectMEListings() {
-	slog.Info("collecting me listings")
-	meListings, err := me.FindAllSellterTradeStates(solanaConnection)
+func CollectMEM2Listings() {
+	slog.Info("collecting me v2 listings")
+	meListings, err := me.FindAllM2SellterTradeStates(solanaConnection)
 	if err != nil {
 		log.Fatalf("unable to get ME listings: %v", err)
 	}
 
 	slog.Info("found listings", "count", len(meListings))
 
-	filteredListings := make([]*me.SellerTradeState, 0, len(meListings))
+	filteredListings := make([]*me.M2SellerTradeState, 0, len(meListings))
+	for _, listing := range meListings {
+		if !listing.PaymentMint.IsZero() {
+			continue
+		}
+		filteredListings = append(filteredListings, listing)
+	}
+
+	slog.Info("filtered listings", "count", len(filteredListings))
+
+	for i := 0; i < len(filteredListings); i += helius.MaxBatchSize {
+		j := i + helius.MaxBatchSize
+		if j > len(filteredListings) {
+			j = len(filteredListings)
+		}
+		// process
+		slice := filteredListings[i:j]
+		assets := make([]string, 0, len(slice))
+		for _, acc := range slice {
+			assets = append(assets, acc.TokenMint.String())
+		}
+
+		assetsInfo, err := dasApi.GetAssetsBatch(assets)
+		if err != nil {
+			log.Fatalf("unable to get assets: %v", err)
+		}
+
+		result := assetsInfo.GetArray("result")
+		for i, asset := range result {
+			meAcc := slice[i]
+			grouping := asset.Get("grouping", "0")
+			if grouping == nil {
+				slog.Info("no grouping", "asset", assets[i])
+				continue
+			}
+			groupKey := string(grouping.GetStringBytes("group_key"))
+			groupValue := string(grouping.GetStringBytes("group_value"))
+			if groupKey != "collection" {
+				slog.Info("no collection", "asset", assets[i])
+				continue
+			}
+			royalty := asset.GetFloat64("royalty", "percent")
+			// cache royalty
+			rdb.HSet(ctx, "collection:"+groupValue, "royalty", royalty)
+
+			floatPrice := float64(meAcc.BuyerPrice)
+			buyPrice := uint64(math.Round(floatPrice + floatPrice*royalty + floatPrice*me.TakerFee))
+			slog.Info("found me listing", "collection", groupValue, "assetId", meAcc.TokenMint.String(), "buyPrice", buyPrice)
+			if collectionPrice, ok := magicEdenCollectionToMinPrice[groupValue]; ok {
+				if buyPrice < collectionPrice {
+					magicEdenCollectionToMinPrice[groupValue] = buyPrice
+				}
+			} else {
+				magicEdenCollectionToMinPrice[groupValue] = buyPrice
+			}
+		}
+	}
+}
+
+func CollectMEM3Listings() {
+	slog.Info("collecting me v3 listings")
+	meListings, err := me.FindAllM3SellterTradeStates(solanaConnection)
+	if err != nil {
+		log.Fatalf("unable to get ME listings: %v", err)
+	}
+
+	slog.Info("found listings", "count", len(meListings))
+
+	filteredListings := make([]*me.M3SellerTradeState, 0, len(meListings))
 	for _, listing := range meListings {
 		if !listing.PaymentMint.IsZero() {
 			continue
@@ -50,7 +118,7 @@ func CollectMEListings() {
 			assets = append(assets, acc.AssetId.String())
 		}
 
-		assetsInfo, err := client.GetAssetsBatch(assets)
+		assetsInfo, err := dasApi.GetAssetsBatch(assets)
 		if err != nil {
 			log.Fatalf("unable to get assets: %v", err)
 		}

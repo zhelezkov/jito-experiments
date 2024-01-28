@@ -85,7 +85,8 @@ func main() {
 	}
 	defer conn.Close()
 
-	CollectMEListings()
+	// CollectMEM2Listings()
+	CollectMEM3Listings()
 	CollectTensorBids()
 
 	for collectionId, meBuyPrice := range magicEdenCollectionToMinPrice {
