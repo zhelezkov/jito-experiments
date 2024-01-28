@@ -23,6 +23,7 @@ type M2SellerTradeState struct {
 	SellerReferral  solana.PublicKey
 	BuyerPrice      uint64
 	TokenMint       solana.PublicKey
+	TokenAccount    solana.PublicKey
 	TokenSize       uint64
 	// bump u8
 	Expiry      int64
@@ -37,9 +38,10 @@ func ParseM2SellerTradeState(data []byte) *M2SellerTradeState {
 		SellerReferral:  solana.PublicKey(data[64:96]),
 		BuyerPrice:      binary.LittleEndian.Uint64(data[96:104]),
 		TokenMint:       solana.PublicKey(data[104:136]),
-		TokenSize:       binary.LittleEndian.Uint64(data[136:144]),
-		Expiry:          int64(binary.LittleEndian.Uint64(data[144:152])),
-		PaymentMint:     solana.PublicKey(data[152:184]),
+		TokenAccount:    solana.PublicKey(data[136:168]),
+		TokenSize:       binary.LittleEndian.Uint64(data[168:176]),
+		Expiry:          int64(binary.LittleEndian.Uint64(data[177:185])),
+		PaymentMint:     solana.PublicKey(data[185:217]),
 	}
 }
 
