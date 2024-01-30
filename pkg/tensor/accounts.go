@@ -11,6 +11,8 @@ import (
 
 var CompressedMarketplaceProgramAddress = solana.MustPublicKeyFromBase58("TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp")
 var WhitelistProgramAddress = solana.MustPublicKeyFromBase58("TL1ST2iRBzuGTqLn1KXnGdSnEow62BzPnGiqyRXhWtW")
+var TSwapProgramAddress = solana.MustPublicKeyFromBase58("TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN")
+var TBidProgramAddress = solana.MustPublicKeyFromBase58("TB1Dqt8JeKQh7RLDzfYDJsq8KS4fS2yt87avRjyRxMv")
 
 const TakerFee = 0.014 // 1.4%
 
@@ -140,7 +142,9 @@ var BidStateDiscriminator = [...]byte{
 }
 
 // SIZE 8 + 1 + 1 + (32 * 2) + 1 + 32 + 2 + 33 + 4 * 2 + 8 + 33 + 8 + (33 * 3) + 128 = 426
-type BidState struct {
+type CnftBidState struct {
+	Address solana.PublicKey // not part of the account data
+
 	Version uint8
 	// padding 1
 	Owner          solana.PublicKey
@@ -161,7 +165,7 @@ type BidState struct {
 	Cosigner       solana.PublicKey
 }
 
-func ParseBidState(data []byte) (*BidState, error) {
+func ParseCnftBidState(address solana.PublicKey, data []byte) (*CnftBidState, error) {
 	decoder := bin.NewBinDecoder(data)
 	decoder.SkipBytes(8) // skip discriminator
 	version, err := decoder.ReadUint8()
@@ -256,7 +260,8 @@ func ParseBidState(data []byte) (*BidState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BidState{
+	return &CnftBidState{
+		Address:        address,
 		Version:        version,
 		Owner:          solana.PublicKey(owner),
 		BidId:          solana.PublicKey(bidId),
@@ -277,7 +282,7 @@ func ParseBidState(data []byte) (*BidState, error) {
 	}, nil
 }
 
-func FindAllBidStates(connection *rpc.Client) ([]*BidState, error) {
+func FindAllCnftBidStates(connection *rpc.Client) ([]*CnftBidState, error) {
 	gpa, err := connection.GetProgramAccountsWithOpts(context.Background(), CompressedMarketplaceProgramAddress, &rpc.GetProgramAccountsOpts{
 		Commitment: rpc.CommitmentFinalized,
 		Filters: []rpc.RPCFilter{{
@@ -291,9 +296,9 @@ func FindAllBidStates(connection *rpc.Client) ([]*BidState, error) {
 		return nil, err
 	}
 
-	bidstates := make([]*BidState, 0, len(gpa))
+	bidstates := make([]*CnftBidState, 0, len(gpa))
 	for _, acc := range gpa {
-		bidState, err := ParseBidState(acc.Account.Data.GetBinary())
+		bidState, err := ParseCnftBidState(acc.Pubkey, acc.Account.Data.GetBinary())
 		if err != nil {
 			return nil, err
 		}
@@ -301,4 +306,342 @@ func FindAllBidStates(connection *rpc.Client) ([]*BidState, error) {
 	}
 
 	return bidstates, nil
+}
+
+var NftBidStateDiscriminator = [...]byte{
+	0x9b, 0xc5, 0x05, 0x61, 0xbd, 0x3c, 0x08, 0xb7,
+}
+
+// SIZE 8 + 1 + 8 + (32 * 2) + 1 + 8 + 33 + 8 + 56
+type NftBidState struct {
+	Address solana.PublicKey // not part of the account data
+
+	Version   uint8
+	BidAmount uint64
+	NftMint   solana.PublicKey
+	Bidder    solana.PublicKey
+	// bump 1
+	Expiry    int64
+	Margin    *solana.PublicKey
+	UpdatedAt int64
+}
+
+func ParseNftBidState(address solana.PublicKey, data []byte) (*NftBidState, error) {
+	decoder := bin.NewBinDecoder(data)
+	decoder.SkipBytes(8) // skip discriminator
+	version, err := decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	bidAmount, err := decoder.ReadUint64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	nftMint, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	bidder, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	decoder.SkipBytes(1)
+	expiry, err := decoder.ReadInt64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+
+	hasMargin, err := decoder.ReadOption()
+	if err != nil {
+		return nil, err
+	}
+	var margin solana.PublicKey
+	if hasMargin {
+		marginBytes, err := decoder.ReadBytes(solana.PublicKeyLength)
+		if err != nil {
+			return nil, err
+		}
+		margin = solana.PublicKey(marginBytes)
+	}
+	updatedAt, err := decoder.ReadInt64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	return &NftBidState{
+		Address:   solana.PublicKey(address),
+		Version:   version,
+		BidAmount: bidAmount,
+		NftMint:   solana.PublicKey(nftMint),
+		Bidder:    solana.PublicKey(bidder),
+		Expiry:    expiry,
+		Margin:    &margin,
+		UpdatedAt: updatedAt,
+	}, nil
+}
+
+func FindAllNftBidStates(connection *rpc.Client) ([]*NftBidState, error) {
+	gpa, err := connection.GetProgramAccountsWithOpts(context.Background(), TBidProgramAddress, &rpc.GetProgramAccountsOpts{
+		Commitment: rpc.CommitmentFinalized,
+		Filters: []rpc.RPCFilter{{
+			Memcmp: &rpc.RPCFilterMemcmp{
+				Offset: 0,
+				Bytes:  NftBidStateDiscriminator[:],
+			},
+		}},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	bidstates := make([]*NftBidState, 0, len(gpa))
+	for _, acc := range gpa {
+		bidState, err := ParseNftBidState(acc.Pubkey, acc.Account.Data.GetBinary())
+		if err != nil {
+			return nil, err
+		}
+		bidstates = append(bidstates, bidState)
+	}
+
+	return bidstates, nil
+}
+
+var TSwapPoolDiscriminator = [...]byte{
+	0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc,
+}
+
+type poolConfig struct {
+	PoolType       uint8
+	CurveType      uint8
+	StartingPrice  uint64
+	Delta          uint64
+	MMCompoindFees bool
+	MMFeeBps       *uint16
+}
+
+type poolStats struct {
+	TakerSellCount      uint32
+	TakerBuyCount       uint32
+	AccumulatedMMProfit uint64
+}
+
+type Frozen struct {
+	Amount uint64
+	Time   int64
+}
+
+// SIZE 8 + (3 * 1) + 8 + (2 * 1) + (2 * 8) + 1 + 3 + (5 * 32) + (3 * 4) + (2 * 4) + 8 + 32 + 1 + 1 + 1 + 8 + 8 + 1 + 8 + 4
+type TSwapPool struct {
+	Address solana.PublicKey // not part of the account data
+
+	Version               uint8
+	Bump                  uint8
+	SolEscrowBump         uint8
+	CreatedUnixSeconds    int64
+	PoolConfig            poolConfig
+	TSwap                 solana.PublicKey
+	Owner                 solana.PublicKey
+	Whitelist             solana.PublicKey
+	SolEscrow             solana.PublicKey
+	TakerSellCount        uint32
+	TakerBuyCount         uint32
+	NFTsHeld              uint32
+	NftAuthority          solana.PublicKey
+	PoolStats             poolStats
+	Margin                *solana.PublicKey
+	IsCosigned            bool
+	OrderType             uint8
+	Frozen                *Frozen
+	LastTransactedSeconds int64
+	MaxTakerSellCount     uint32
+}
+
+func ParseTSwapPool(address solana.PublicKey, data []byte) (*TSwapPool, error) {
+	decoder := bin.NewBinDecoder(data)
+	decoder.SkipBytes(8) // skip discriminator
+	version, err := decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	bump, err := decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	solEscrowBump, err := decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	createdUnixSeconds, err := decoder.ReadInt64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	poolConfig := poolConfig{}
+	poolConfig.PoolType, err = decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	poolConfig.CurveType, err = decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	poolConfig.StartingPrice, err = decoder.ReadUint64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	poolConfig.Delta, err = decoder.ReadUint64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	poolConfig.MMCompoindFees, err = decoder.ReadBool()
+	if err != nil {
+		return nil, err
+	}
+	hasMMFeeBps, err := decoder.ReadOption()
+	if err != nil {
+		return nil, err
+	}
+	if hasMMFeeBps {
+		mmFeeBps, err := decoder.ReadUint16(binary.LittleEndian)
+		if err != nil {
+			return nil, err
+		}
+		poolConfig.MMFeeBps = &mmFeeBps
+	}
+	tswap, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	owner, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	whitelist, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	solEscrow, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	takerSellCount, err := decoder.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	takerBuyCount, err := decoder.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	nftsHeld, err := decoder.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	nftAuthority, err := decoder.ReadBytes(solana.PublicKeyLength)
+	if err != nil {
+		return nil, err
+	}
+	poolStats := poolStats{}
+	poolStats.TakerSellCount, err = decoder.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	poolStats.TakerBuyCount, err = decoder.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	poolStats.AccumulatedMMProfit, err = decoder.ReadUint64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	hasMargin, err := decoder.ReadOption()
+	if err != nil {
+		return nil, err
+	}
+	var margin *solana.PublicKey
+	if hasMargin {
+		marginBytes, err := decoder.ReadBytes(solana.PublicKeyLength)
+		if err != nil {
+			return nil, err
+		}
+		margin = (*solana.PublicKey)(marginBytes)
+	}
+	isCosigned, err := decoder.ReadBool()
+	if err != nil {
+		return nil, err
+	}
+	orderType, err := decoder.ReadUint8()
+	if err != nil {
+		return nil, err
+	}
+	hasFrozen, err := decoder.ReadOption()
+	if err != nil {
+		return nil, err
+	}
+	var frozen *Frozen
+	if hasFrozen {
+		frozen = &Frozen{}
+		frozen.Amount, err = decoder.ReadUint64(binary.LittleEndian)
+		if err != nil {
+			return nil, err
+		}
+		frozen.Time, err = decoder.ReadInt64(binary.LittleEndian)
+		if err != nil {
+			return nil, err
+		}
+	}
+	lastTransactedSeconds, err := decoder.ReadInt64(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	maxTakerSellCount, err := decoder.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	return &TSwapPool{
+		Address:               address,
+		Version:               version,
+		Bump:                  bump,
+		SolEscrowBump:         solEscrowBump,
+		CreatedUnixSeconds:    createdUnixSeconds,
+		PoolConfig:            poolConfig,
+		TSwap:                 solana.PublicKey(tswap),
+		Owner:                 solana.PublicKey(owner),
+		Whitelist:             solana.PublicKey(whitelist),
+		SolEscrow:             solana.PublicKey(solEscrow),
+		TakerSellCount:        takerSellCount,
+		TakerBuyCount:         takerBuyCount,
+		NFTsHeld:              nftsHeld,
+		NftAuthority:          solana.PublicKey(nftAuthority),
+		PoolStats:             poolStats,
+		Margin:                margin,
+		IsCosigned:            isCosigned,
+		OrderType:             orderType,
+		Frozen:                frozen,
+		LastTransactedSeconds: lastTransactedSeconds,
+		MaxTakerSellCount:     maxTakerSellCount,
+	}, nil
+}
+
+func FindAllTSwapPools(connection *rpc.Client) ([]*TSwapPool, error) {
+	gpa, err := connection.GetProgramAccountsWithOpts(context.Background(), TSwapProgramAddress, &rpc.GetProgramAccountsOpts{
+		Commitment: rpc.CommitmentFinalized,
+		Filters: []rpc.RPCFilter{{
+			Memcmp: &rpc.RPCFilterMemcmp{
+				Offset: 0,
+				Bytes:  TSwapPoolDiscriminator[:],
+			},
+		}},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	pools := make([]*TSwapPool, 0, len(gpa))
+	for _, acc := range gpa {
+		pool, err := ParseTSwapPool(acc.Pubkey, acc.Account.Data.GetBinary())
+		if err != nil {
+			return nil, err
+		}
+		pools = append(pools, pool)
+	}
+
+	return pools, nil
 }

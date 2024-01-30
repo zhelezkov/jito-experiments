@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -24,6 +25,7 @@ var (
 	ctx = context.Background()
 
 	solanaConnection *rpc.Client
+	heliusConnection *rpc.Client
 	rdb              = redis.NewClient(&redis.Options{})
 )
 
@@ -46,6 +48,7 @@ func init() {
 	log.SetFlags(log.LUTC | log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	solanaConnection = rpc.New(os.Getenv("RPC_URL"))
+	heliusConnection = rpc.New(os.Getenv("HELIUS_RPC_URL"))
 
 	jitoAuthKey = solana.MustPrivateKeyFromBase58(os.Getenv("JITO_AUTH_PRIVATE_KEY"))
 	blockEngineUrl = os.Getenv("JITO_BLOCK_ENGINE_URL")
@@ -55,6 +58,14 @@ func init() {
 	if err != nil {
 		log.Fatal("Error parsing TRADER_TRADE_AMOUNT_LAMPORTS", err)
 	}
+}
+
+var collectionsToIgnore = []string{
+	"CM7i3GQcKbfxcpGZ6gB5jnxzYSLMEYKV1W1ANHGFB7gR",
+	"CypYhR5YCZidKcqd9vLm6M8PbpfowfeetzfckF1pQ13J",
+	"B36M7T2XSayyYAB5Ubs6EsR9fJ2cdrdhhr3DgEYVWaEU",
+	"6ezc56sGNHLUDUTS8bKgPx65rnkR1VwiPfb6foAV6K2A",
+	"9BJdqDz2c8V1dtj122AMSeFtjcg4zBiHLpyxtPNacYew",
 }
 
 type CollectionInfo struct {
@@ -85,13 +96,18 @@ func main() {
 	}
 	defer conn.Close()
 
-	// CollectMEM2Listings()
+	PreInit()
+	CollectMEM2Listings()
 	CollectMEM3Listings()
-	CollectTensorBids()
+	CollectTensorCnftBids()
+	CollectTensorNftBids()
 
 	for collectionId, meBuyPrice := range magicEdenCollectionToMinPrice {
 		sellPrice, ok := tensorCollectionToMaxSellPrice[collectionId]
 		if !ok {
+			continue
+		}
+		if slices.Contains(collectionsToIgnore, collectionId) {
 			continue
 		}
 		if sellPrice > meBuyPrice {
