@@ -10,4 +10,4 @@ Experiments itself were the followoing:
   - Token sniper for fluxbeam(fluxbeam-sniper) - I haven't completed it, cause hypothesis failed. There was a few activity on fluxbeam, like 1 new token per an hour(?)
   - Liquidator for marginfi(liq) - I haven't completed it, cause wasn't able to capture big liquidations, only a small ones. Prob want to get back to it later
 
-It wes my first project in Go!
+It was my first project in Go!
